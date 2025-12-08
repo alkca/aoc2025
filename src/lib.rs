@@ -1,10 +1,10 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
-static RE_DIGITS: Lazy<Regex> = Lazy::new(|| Regex::new(r"\d+").unwrap());
+static RE_DIGITS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\d+").unwrap());
 
 pub fn input_path(day: u8, example: bool) -> PathBuf {
     let file = if example {

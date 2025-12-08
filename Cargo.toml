@@ -5,5 +5,4 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
-once_cell = "1.21.3"
 regex = "1.12.2"
