@@ -20,18 +20,14 @@ pub fn input_path(day: u8, example: bool) -> PathBuf {
 
 pub fn read_input(day: u8) -> String {
     let filename = input_path(day, false);
-    fs::read_to_string(&filename).expect(&format!(
-        "failed to read input file: {}",
-        filename.display()
-    ))
+    fs::read_to_string(&filename)
+        .unwrap_or_else(|_| panic!("failed to read input file: {}", filename.display()))
 }
 
 pub fn read_example(day: u8) -> String {
     let filename = input_path(day, true);
-    fs::read_to_string(&filename).expect(&format!(
-        "failed to read example input file: {}",
-        filename.display()
-    ))
+    fs::read_to_string(&filename)
+        .unwrap_or_else(|_| panic!("failed to read example input file: {}", filename.display()))
 }
 
 pub fn extract_day_from_exe() -> u8 {
