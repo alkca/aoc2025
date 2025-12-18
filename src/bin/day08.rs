@@ -62,7 +62,7 @@ impl PartialOrd for DistBetweenPoint3 {
     }
 }
 
-fn calc_shortest_points_list(points: &Vec<Point3>, size: usize) -> BinaryHeap<DistBetweenPoint3> {
+fn calc_shortest_points_list(points: &[Point3], size: usize) -> BinaryHeap<DistBetweenPoint3> {
     let mut list: BinaryHeap<DistBetweenPoint3> = BinaryHeap::with_capacity(size + 1);
 
     for (i, point) in points.iter().enumerate() {
@@ -94,10 +94,8 @@ fn calc_top_circuits(
 
     for p in points_list.into_sorted_vec().iter() {
         // dbg!(p);
-        let mut found_circuit = false;
-        let mut merge_circuit = false;
-        let mut merge_from_idx = 0;
-        let mut merge_into_idx = 0;
+        let mut merge_circuit_idx = None;
+        let mut found_circuit_idx = None;
         for (i, circuit) in circuits.iter_mut().enumerate() {
             //        for circuit in circuits.iter_mut() {
             let origin_exists = circuit.contains(&p.origin);
@@ -105,15 +103,13 @@ fn calc_top_circuits(
             if origin_exists && dest_exists {
                 break;
             } else if origin_exists || dest_exists {
-                if found_circuit {
+                if found_circuit_idx.is_some() {
                     //If we had already found the circuit we need to merge into it
-                    merge_from_idx = i;
-                    merge_circuit = true;
+                    merge_circuit_idx = Some(i);
                     break;
                 }
                 connection_count -= 1;
-                found_circuit = true;
-                merge_into_idx = i;
+                found_circuit_idx = Some(i);
                 if !origin_exists {
                     circuit.push(p.origin);
                 }
@@ -122,15 +118,16 @@ fn calc_top_circuits(
                 }
             }
         }
-        if !found_circuit {
-            let new_circuit: Vec<Point3> = vec![p.origin, p.dest];
-            circuits.push(new_circuit);
+        if let Some(merge_into_idx) = found_circuit_idx {
+            if let Some(idx) = merge_circuit_idx {
+                let mut to_merge = circuits.remove(idx);
+                circuits[merge_into_idx].append(&mut to_merge);
+                circuits[merge_into_idx].sort();
+                circuits[merge_into_idx].dedup();
+            }
+        } else {
+            circuits.push(vec![p.origin, p.dest]);
             connection_count -= 1;
-        } else if merge_circuit {
-            let mut to_merge = circuits.remove(merge_from_idx);
-            circuits[merge_into_idx].append(&mut to_merge);
-            circuits[merge_into_idx].sort();
-            circuits[merge_into_idx].dedup();
         }
         if connection_count == 0 {
             break;
@@ -153,21 +150,79 @@ fn calc_top_circuits(
 // shortest_count: is what number of shortest points between two points to collect
 // circuit_count: is the number of top largest circuits to factor in the calculation
 fn part1(input: &str, shortest_count: usize, circuit_count: usize) -> Result<i64> {
-    let boxes = input
+    let boxes: Vec<Point3> = input
         .lines()
         .map(|s| s.parse::<Point3>().unwrap())
         .collect();
 
     let points_list: BinaryHeap<DistBetweenPoint3> =
-        calc_shortest_points_list(&boxes, shortest_count * 20);
+        calc_shortest_points_list(&boxes, shortest_count);
 
     let total = calc_top_circuits(points_list, shortest_count, circuit_count) as i64;
 
     Ok(total)
 }
 
+fn calc_last_two_boxes(points_list: BinaryHeap<DistBetweenPoint3>, total_boxes: usize) -> i32 {
+    let mut total: i32 = 1;
+    let mut circuits: Vec<Vec<Point3>> = Vec::new();
+
+    for p in points_list.into_sorted_vec().iter() {
+        // dbg!(p);
+        let mut merge_circuit_idx = None;
+        let mut found_circuit_idx = None;
+        for (i, circuit) in circuits.iter_mut().enumerate() {
+            //        for circuit in circuits.iter_mut() {
+            let origin_exists = circuit.contains(&p.origin);
+            let dest_exists = circuit.contains(&p.dest);
+            if origin_exists && dest_exists {
+                break;
+            } else if origin_exists || dest_exists {
+                if found_circuit_idx.is_some() {
+                    //If we had already found the circuit we need to merge into it
+                    merge_circuit_idx = Some(i);
+                    break;
+                }
+                found_circuit_idx = Some(i);
+                if !origin_exists {
+                    circuit.push(p.origin);
+                }
+                if !dest_exists {
+                    circuit.push(p.dest);
+                }
+            }
+        }
+        if let Some(merge_into_idx) = found_circuit_idx {
+            if let Some(idx) = merge_circuit_idx {
+                let mut to_merge = circuits.remove(idx);
+                circuits[merge_into_idx].append(&mut to_merge);
+                circuits[merge_into_idx].sort();
+                circuits[merge_into_idx].dedup();
+            }
+        } else {
+            circuits.push(vec![p.origin, p.dest]);
+        }
+        if circuits[0].len() == total_boxes {
+            total = p.origin.x * p.dest.x;
+            break;
+        }
+        // dbg!(&circuits);
+    }
+    // dbg!(&circuits);
+
+    total
+}
+
 fn part2(input: &str) -> Result<i64> {
-    let total = input.len() as i64;
+    let boxes: Vec<Point3> = input
+        .lines()
+        .map(|s| s.parse::<Point3>().unwrap())
+        .collect();
+
+    let points_list: BinaryHeap<DistBetweenPoint3> =
+        calc_shortest_points_list(&boxes, boxes.len() * 10); // UGLY Hack with 10 constant to throw processing power instead of elegant solution
+
+    let total = calc_last_two_boxes(points_list, boxes.len()) as i64;
 
     Ok(total)
 }
@@ -197,6 +252,6 @@ mod tests {
     #[test]
     fn test_part2() {
         let input = read_example(extract_day_from_exe());
-        assert_eq!(part2(&input).unwrap(), 40);
+        assert_eq!(part2(&input).unwrap(), 25272);
     }
 }
