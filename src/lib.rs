@@ -6,12 +6,8 @@ use std::sync::LazyLock;
 
 static RE_DIGITS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\d+").unwrap());
 
-pub fn input_path(day: u8, example: bool) -> PathBuf {
-    let file = if example {
-        format!("day{:02}-example.txt", day)
-    } else {
-        format!("day{:02}.txt", day)
-    };
+pub fn input_path(day: u8, part_str: &str) -> PathBuf {
+    let file = format!("day{:02}{}.txt", day, part_str);
 
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("inputs")
@@ -19,13 +15,19 @@ pub fn input_path(day: u8, example: bool) -> PathBuf {
 }
 
 pub fn read_input(day: u8) -> String {
-    let filename = input_path(day, false);
+    let filename = input_path(day, "");
     fs::read_to_string(&filename)
         .unwrap_or_else(|_| panic!("failed to read input file: {}", filename.display()))
 }
 
 pub fn read_example(day: u8) -> String {
-    let filename = input_path(day, true);
+    let filename = input_path(day, "-example");
+    fs::read_to_string(&filename)
+        .unwrap_or_else(|_| panic!("failed to read example input file: {}", filename.display()))
+}
+
+pub fn read_example_part2(day: u8) -> String {
+    let filename = input_path(day, "-part2-example");
     fs::read_to_string(&filename)
         .unwrap_or_else(|_| panic!("failed to read example input file: {}", filename.display()))
 }
