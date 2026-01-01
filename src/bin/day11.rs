@@ -84,9 +84,9 @@ impl Graph {
 
         while let Some((index, path)) = queue.pop() {
             if index == end_index {
-                if paths.len() % 100 == 0 {
-                    dbg!(paths.len(), &path);
-                }
+                // if paths.len() % 100 == 0 {
+                //     dbg!(paths.len(), &path);
+                // }
 
                 paths.push(path.clone());
                 continue;
@@ -105,122 +105,75 @@ impl Graph {
         paths
     }
 
+    fn dfs_match(
+        &self,
+        start_index: usize,
+        end_index: usize,
+        match_mask: usize,
+        match_required_mask: usize,
+        required_ids: &[usize],
+        cache: &mut HashMap<(usize, usize), usize>,
+    ) -> usize {
+        let key = (start_index, match_mask);
+        if let Some(&cached) = cache.get(&key) {
+            return cached;
+        }
+
+        if start_index == end_index {
+            if match_mask == match_required_mask {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+        let mut new_mask = match_mask;
+
+        if let Some(pos) = required_ids.iter().position(|n| *n == start_index) {
+            new_mask |= 1 << pos;
+        }
+
+        let mut count = 0;
+        for edge in self.edges[start_index].iter() {
+            count += self.dfs_match(
+                *edge,
+                end_index,
+                new_mask,
+                match_required_mask,
+                required_ids,
+                cache,
+            );
+        }
+
+        cache.insert(key, count);
+
+        count
+    }
+
     fn dfs_paths_with_required_ids(
         &mut self,
         start: &str,
         end: &str,
         required_ids: &[usize],
-    ) -> Vec<Vec<usize>> {
-        let mut paths: Vec<Vec<usize>> = Vec::new();
+    ) -> usize {
         let start_index = self.add_node(start);
         let end_index = self.add_node(end);
+        let mut count = 0;
 
-        // Queue for DFS of (node, path to node)
-        let mut queue: Vec<(usize, Vec<usize>)> = vec![(start_index, vec![start_index])];
+        let match_required_mask = 2_usize.pow(required_ids.len() as u32) - 1;
+        let mut cache = HashMap::new();
 
-        let mut count: i64 = 0;
-        let start_time = Instant::now();
-        let mut last_debug_time = start_time;
-
-        while let Some((index, path)) = queue.pop() {
-            count += 1;
-
-            if count % 10000000 == 0 {
-                let current_time = Instant::now();
-                let elapsed_since_last = current_time.duration_since(last_debug_time);
-                dbg!(count, &queue.len(), elapsed_since_last);
-                last_debug_time = current_time;
-            }
-            if index == end_index {
-                // if paths.len() % 1000 == 0 {
-                //     dbg!(required_ids, paths.len(), &path);
-                // }
-
-                let mut valid_path = true;
-                for node in required_ids.iter() {
-                    if !path.contains(node) {
-                        valid_path = false;
-                        break;
-                    }
-                }
-                if valid_path {
-                    dbg!(required_ids, paths.len(), &path);
-                    paths.push(path.clone());
-                }
-                continue;
-            }
-            // dbg!(start_index, end_index);
-            // dbg!(&path);
-            for edge in self.edges[index].iter() {
-                if !path.contains(edge) {
-                    let mut new_path = Vec::with_capacity(path.len() + 1);
-                    new_path.extend_from_slice(&path);
-                    new_path.push(*edge);
-                    queue.push((*edge, new_path));
-                }
-            }
+        for edge in self.edges[start_index].iter() {
+            count += self.dfs_match(
+                *edge,
+                end_index,
+                0,
+                match_required_mask,
+                required_ids,
+                &mut cache,
+            );
         }
 
-        paths
-    }
-
-    fn dfs_paths_with_required_ids2(
-        &mut self,
-        start: &str,
-        end: &str,
-        required_ids: &[usize],
-    ) -> Vec<Vec<usize>> {
-        let mut paths: Vec<Vec<usize>> = Vec::new();
-        let start_index = self.add_node(start);
-        let end_index = self.add_node(end);
-
-        // Queue for DFS of (node, path_to_node_as_rc)
-        let start_path = PathNode::new(start_index, None);
-        let mut queue: Vec<(usize, Rc<PathNode>)> = vec![(start_index, start_path)];
-
-        let mut count: i64 = 0;
-        let start_time = Instant::now();
-        let mut last_debug_time = start_time;
-
-        while let Some((index, path)) = queue.pop() {
-            count += 1;
-
-            if count % 10_000_000 == 0 {
-                let current_time = Instant::now();
-                let elapsed_since_last = current_time.duration_since(last_debug_time);
-                dbg!(count, queue.len(), elapsed_since_last);
-                last_debug_time = current_time;
-            }
-
-            if index == end_index {
-                // validate required_ids against the Rc-path
-                let mut valid_path = true;
-                for &req in required_ids {
-                    if !PathNode::contains(&path, req) {
-                        valid_path = false;
-                        break;
-                    }
-                }
-
-                if valid_path {
-                    // materialize only at the end
-                    let vec_path = PathNode::to_vec(&path);
-                    dbg!(required_ids, paths.len(), &vec_path);
-                    paths.push(vec_path);
-                }
-                continue;
-            }
-
-            for &edge in self.edges[index].iter() {
-                if !PathNode::contains(&path, edge) {
-                    // NO cloning of the whole path: just one new PathNode
-                    let new_path = PathNode::new(edge, Some(Rc::clone(&path)));
-                    queue.push((edge, new_path));
-                }
-            }
-        }
-
-        paths
+        count
     }
 
     fn convert_node_str_to_index(&mut self, node_str: Vec<&str>) -> Vec<usize> {
@@ -252,11 +205,7 @@ fn part1(input: &str) -> Result<usize> {
     let mut devices: HashMap<&str, Vec<&str>> = HashMap::new();
 
     for line in input.lines() {
-        let device_str: Vec<&str> = line
-            .split([' ', ':'])
-            // .split(|c| c == ' ' || c == ':')
-            .filter(|p| !p.is_empty())
-            .collect();
+        let device_str: Vec<&str> = line.split([' ', ':']).filter(|p| !p.is_empty()).collect();
         devices.insert(device_str[0], device_str[1..].to_vec());
     }
 
@@ -268,7 +217,7 @@ fn part1(input: &str) -> Result<usize> {
     Ok(total)
 }
 
-fn part2(input: &str) -> Result<i64> {
+fn part2(input: &str) -> Result<usize> {
     const START: &str = "svr";
     const END: &str = "out";
     let required_node_str_on_path: Vec<&str> = vec!["dac", "fft"];
@@ -276,36 +225,14 @@ fn part2(input: &str) -> Result<i64> {
     let mut devices: HashMap<&str, Vec<&str>> = HashMap::new();
 
     for line in input.lines() {
-        let device_str: Vec<&str> = line
-            .split([' ', ':'])
-            // .split(|c| c == ' ' || c == ':')
-            .filter(|p| !p.is_empty())
-            .collect();
+        let device_str: Vec<&str> = line.split([' ', ':']).filter(|p| !p.is_empty()).collect();
         devices.insert(device_str[0], device_str[1..].to_vec());
     }
 
     let mut graph: Graph = build_graph_from_list(&devices);
     let required_node_idx_on_path = graph.convert_node_str_to_index(required_node_str_on_path);
 
-    let paths = graph.dfs_paths_with_required_ids2(START, END, &required_node_idx_on_path);
-    // dbg!(&paths);
-    dbg!(&required_node_idx_on_path);
-    dbg!(&graph);
-    let mut total = 0;
-    for path in paths.iter() {
-        let mut valid_path = true;
-        for node in required_node_idx_on_path.iter() {
-            if !path.contains(node) {
-                valid_path = false;
-                break;
-            }
-        }
-        if valid_path {
-            total += 1;
-        }
-        dbg!(&valid_path, &path);
-    }
-    // dbg!(&devices);
+    let total = graph.dfs_paths_with_required_ids(START, END, &required_node_idx_on_path);
 
     Ok(total)
 }
@@ -315,7 +242,7 @@ fn main() -> Result<()> {
     let input = read_input(day);
 
     println!("Day {:02}", day);
-    // println!("===>Part 1: {}", part1(&input)?);
+    println!("===>Part 1: {}", part1(&input)?);
     println!("===>Part 2: {}", part2(&input)?);
 
     Ok(())
